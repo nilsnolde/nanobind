@@ -540,7 +540,8 @@ The program has the following command line options:
 .. code-block:: text
 
    usage: python -m nanobind.stubgen [-h] [-o FILE] [-O PATH] [-i PATH] [-m MODULE]
-                                     [-r] [-M FILE] [-P] [-D] [--exclude-values] [-q]
+                                     [-r] [-M FILE] [-P] [-D] [--exclude-values]
+                                     [--min-python-version VERSION] [-q]
 
    Generate stubs for nanobind-based extensions.
 
@@ -560,7 +561,22 @@ The program has the following command line options:
                                    trailing underscore)
      -D, --exclude-docstrings      exclude docstrings from the generated stub
      --exclude-values              force the use of ... for values
+     --min-python-version VERSION          ensure that generated stubs are valid for Python >=
+                                   VERSION (e.g. '3.9') independent of the interpreter
+                                   running stubgen
      -q, --quiet                   do not generate any output in the absence of failures
+
+By default, the generated stub targets the Python version running the stub
+generator: for example, ``typing.TypeAlias`` only exists on Python 3.10+, so
+stubs generated on older versions import it from ``typing_extensions``
+instead. Specify ``--min-python-version`` to instead target an explicit minimum Python
+version regardless of the interpreter in use. This makes the output
+reproducible across interpreter versions, which is useful when committing
+stubs to version control. Note that signatures overridden via
+:cpp:class:`nb::sig <sig>` are always emitted verbatim; when they use syntax
+or ``typing`` members unavailable in the targeted version (e.g. `PEP 695
+<https://peps.python.org/pep-0695/>`__ type parameter lists), they remain part
+of the stub unchanged.
 
 
 Python interface

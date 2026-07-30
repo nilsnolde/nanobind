@@ -532,6 +532,13 @@ Nanobind's CMake tooling includes a convenience command to interface with the
         - Specify a pattern file used to replace declarations in the stub. The
           syntax is described in the section on :ref:`stub generation <stubs>`.
 
+      * - ``MIN_PYTHON_VERSION``
+        - Ensure that the generated stub is valid for Python versions greater
+          or equal to the given version (e.g. ``3.9``), independent of the
+          Python version running the stub generator. Constructs unavailable in
+          ``typing`` on the targeted version are imported from
+          ``typing_extensions`` instead. Optional.
+
       * - ``COMPONENT``
         - Specify a component when ``INSTALL_TIME`` stub generation is used.
           This is analogous to ``install(..., COMPONENT [name])`` in other

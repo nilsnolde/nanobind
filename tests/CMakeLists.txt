@@ -135,6 +135,34 @@ foreach (NAME functions classes ndarray jax tensorflow stl enum typing make_iter
     ${EXTRA})
 endforeach()
 
+# Stub variants targeting an explicit minimum Python version, checked by test_stubs.py
+nanobind_add_stub(
+  typing_ext_stub_min_python
+  MODULE test_typing_ext
+  OUTPUT ${PYI_PREFIX}test_typing_ext_min_39.pyi
+  PYTHON_PATH $<TARGET_FILE_DIR:test_typing_ext>
+  DEPENDS test_typing_ext "${OUT_DIR}/py_stub_test.py"
+  MIN_PYTHON_VERSION 3.9
+)
+
+nanobind_add_stub(
+  functions_ext_stub_min_python
+  MODULE test_functions_ext
+  OUTPUT ${PYI_PREFIX}test_functions_ext_min_39.pyi
+  PYTHON_PATH $<TARGET_FILE_DIR:test_functions_ext>
+  DEPENDS test_functions_ext
+  MIN_PYTHON_VERSION 3.9
+)
+
+nanobind_add_stub(
+  enum_ext_stub_min_python
+  MODULE test_enum_ext
+  OUTPUT ${PYI_PREFIX}test_enum_ext_min_39.pyi
+  PYTHON_PATH $<TARGET_FILE_DIR:test_enum_ext>
+  DEPENDS test_enum_ext
+  MIN_PYTHON_VERSION 3.9
+)
+
 # Check the version manually: Eigen's "SameMajorVersion" config rejects ranges like "3...5"
 find_package (Eigen3 NO_MODULE)
 if (TARGET Eigen3::Eigen AND Eigen3_VERSION VERSION_GREATER_EQUAL 3.3.1)
@@ -217,6 +245,14 @@ if (NOT (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_CURRENT_BINARY_DIR) OR MSVC)
       DEPENDS ${IN_FILE} OUTPUT ${OUT_FILE}
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${IN_FILE} ${OUT_FILE})
   endforeach()
+
+  # Also copy stubgen.py so that test_stubs.py can import it
+  set(IN_FILE ${NB_DIR}/src/stubgen.py)
+  set(OUT_FILE ${OUT_DIR}/stubgen.py)
+  set(TEST_FILES_OUT ${TEST_FILES_OUT} ${OUT_FILE})
+  add_custom_command(
+    DEPENDS ${IN_FILE} OUTPUT ${OUT_FILE}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${IN_FILE} ${OUT_FILE})
 
   add_custom_target(copy-tests ALL DEPENDS ${TEST_FILES_OUT})
   set(PY_STUB_TEST ${OUT_DIR}/py_stub_test.py)

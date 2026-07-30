@@ -1,6 +1,7 @@
 import os
 import pathlib
 import difflib
+import re
 import sys
 import platform
 import pytest
@@ -103,3 +104,125 @@ def test01_check_stub_refs(p_ref, request):
             file=sys.stderr
         )
         assert False
+
+
+def parse_imports(text):
+    '''Map module name -> set of names imported from it in a stub'''
+    imports = {}
+    lines = text.split('\n')
+    i = 0
+    while i < len(lines):
+        m = re.match(r'from ([\w.]+) import (.*)', lines[i])
+        if m:
+            names = imports.setdefault(m.group(1), set())
+            rest = m.group(2).strip()
+            if rest == '(':
+                i += 1
+                while lines[i].strip() != ')':
+                    names.add(lines[i].strip().rstrip(',').split(' as ')[0])
+                    i += 1
+            else:
+                for n in rest.split(','):
+                    names.add(n.strip().split(' as ')[0])
+        i += 1
+    return imports
+
+
+def typing_post_39():
+    """
+    typing.* members that do not exist on Python 3.9 and hence must not be
+    imported from 'typing' in a stub generated with --min-python-version 3.9:
+    the post-3.9 part of stubgen's TYPING_INTRODUCED version table (plus
+    'CapsuleType', which lives in 'types'/'typing_extensions')
+    """
+    import importlib.util
+    here = pathlib.Path(__file__).parent
+    for candidate in (here / 'stubgen.py', here.parents[1] / 'src' / 'stubgen.py'):
+        if candidate.exists():
+            spec = importlib.util.spec_from_file_location('nb_stubgen', candidate)
+            stubgen = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(stubgen)
+            introduced = stubgen.TYPING_INTRODUCED
+            return {n for n, v in introduced.items() if v > (3, 9)} | {'CapsuleType'}
+    raise RuntimeError('Could not locate stubgen.py!')
+
+# 'typing.__all__' as of Python 3.9 (a fixed historical fact; members
+# removed by later versions, e.g. 'ByteString', are unproblematic here)
+TYPING_BASELINE_39 = {
+    'AbstractSet', 'Annotated', 'Any', 'AnyStr', 'AsyncContextManager',
+    'AsyncGenerator', 'AsyncIterable', 'AsyncIterator', 'Awaitable',
+    'BinaryIO', 'ByteString', 'Callable', 'ChainMap', 'ClassVar',
+    'Collection', 'Container', 'ContextManager', 'Coroutine', 'Counter',
+    'DefaultDict', 'Deque', 'Dict', 'Final', 'ForwardRef', 'FrozenSet',
+    'Generator', 'Generic', 'Hashable', 'IO', 'ItemsView', 'Iterable',
+    'Iterator', 'KeysView', 'List', 'Literal', 'Mapping', 'MappingView',
+    'Match', 'MutableMapping', 'MutableSequence', 'MutableSet', 'NamedTuple',
+    'NewType', 'NoReturn', 'Optional', 'OrderedDict', 'Pattern', 'Protocol',
+    'Reversible', 'Sequence', 'Set', 'Sized', 'SupportsAbs', 'SupportsBytes',
+    'SupportsComplex', 'SupportsFloat', 'SupportsIndex', 'SupportsInt',
+    'SupportsRound', 'Text', 'TextIO', 'Tuple', 'Type', 'TypeVar',
+    'TypedDict', 'Union', 'ValuesView', 'TYPE_CHECKING', 'cast', 'final',
+    'get_args', 'get_origin', 'get_type_hints', 'no_type_check',
+    'no_type_check_decorator', 'overload', 'runtime_checkable',
+}
+
+
+@skip_on_unsupported
+def test02_min_python_typing():
+    """
+    Stubs generated with MIN_PYTHON_VERSION 3.9 must not import 'typing' members
+    that only exist on newer Python versions
+    """
+    p = pathlib.Path(__file__).parent / 'test_typing_ext_min_39.pyi'
+    imports = parse_imports(p.read_text())
+
+    typing_names = imports.get('typing', set())
+    te_names = imports.get('typing_extensions', set())
+
+    assert not (typing_names & typing_post_39())
+    # The typing test extension exercises at least these newer constructs
+    assert 'TypeAlias' in te_names
+    assert 'Self' in te_names
+
+
+@skip_on_unsupported
+def test03_min_python_capsule():
+    """
+    With MIN_PYTHON_VERSION 3.9, 'CapsuleType' must come from 'typing_extensions'
+    regardless of the Python version the extension was compiled for
+    """
+    p = pathlib.Path(__file__).parent / 'test_functions_ext_min_39.pyi'
+    text = p.read_text()
+
+    assert 'types.CapsuleType' not in text
+    assert 'CapsuleType' in parse_imports(text).get('typing_extensions', set())
+
+
+@skip_on_unsupported
+def test04_min_python_str_enum():
+    """
+    With MIN_PYTHON_VERSION 3.9, string-valued enumerations must derive from
+    '(str, enum.Enum)' rather than 'enum.StrEnum' (which requires 3.11+)
+    """
+    p = pathlib.Path(__file__).parent / 'test_enum_ext_min_39.pyi'
+    text = p.read_text()
+
+    assert 'StrEnum' not in text
+    assert 'class Color(str, enum.Enum):' in text
+
+
+@skip_on_unsupported
+def test05_typing_introduced_is_complete():
+    """
+    Guard against new Python versions introducing 'typing' members that
+    stubgen's version table does not know about, which would make stubs
+    generated with --min-python-version silently claim such members exist
+    in 'typing' on older versions.
+    """
+    import typing
+    unknown = set(typing.__all__) - TYPING_BASELINE_39 - typing_post_39()
+    assert not unknown, (
+        f'This Python version provides typing members that stubgen does not '
+        f'know the introduction version of: {sorted(unknown)}. Add them to '
+        f'TYPING_INTRODUCED in src/stubgen.py.'
+    )

@@ -15,6 +15,21 @@ case, both modules must use the same nanobind ABI version, or they will be
 isolated from each other. Releases that don't explicitly mention an ABI version
 below inherit that of the preceding release.
 
+Version 2.14.0 (in development)
+-------------------------------
+
+- The stub generator now takes an optional ``--min-python-version`` argument (also
+  available as ``MIN_PYTHON_VERSION`` in :cmake:command:`nanobind_add_stub` and as the
+  ``min_python`` parameter of ``nanobind.stubgen.StubGen``). It ensures that
+  the generated stub is valid for all Python versions greater or equal to the
+  specified one, independent of the Python version used to run the stub
+  generator: ``typing`` constructs unavailable on the targeted version are
+  imported from ``typing_extensions`` instead, and string-valued enumerations
+  (:cpp:struct:`nb::is_str() <is_str>`) are emitted with the ``(str,
+  enum.Enum)`` bases that nanobind uses on Python versions predating
+  ``enum.StrEnum``. This makes generated stubs reproducible across interpreter
+  versions so that they can, e.g., be committed to version control.
+
 Version 2.13.0 (Jun 18, 2026)
 -----------------------------
 
